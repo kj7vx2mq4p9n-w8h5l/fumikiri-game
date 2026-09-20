@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>ふみきりゲーム</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --chip-bg: rgba(255,255,255,.9);
+    --chip-fg: #2b3440;
+    --card-bg: #fffdf6;
+    --card-fg: #2b3440;
+    --btn-bg: #ffd23f;
+    --btn-fg: #3a2c00;
+    --scrim: rgba(30,60,90,.45);
+    --close-bg: #e5372f;
+    --open-bg: #2fae5c;
+    --font: "Zen Maru Gothic","Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic",sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --chip-bg: rgba(30,36,46,.9);
+      --chip-fg: #f2f5f8;
+      --card-bg: #1f2732;
+      --card-fg: #f2f5f8;
+      --scrim: rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --chip-bg: rgba(30,36,46,.9);
+    --chip-fg: #f2f5f8;
+    --card-bg: #1f2732;
+    --card-fg: #f2f5f8;
+    --scrim: rgba(0,0,0,.55);
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: #7fd66d;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+    font-family: var(--font);
+  }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  .chip {
+    position: fixed;
+    z-index: 5;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    min-width: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 6px 16px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--chip-bg);
+    color: var(--chip-fg);
+    font: 900 22px/1 var(--font);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  #score { left: calc(env(safe-area-inset-left, 0px) + 12px); }
+  #mute  { right: calc(env(safe-area-inset-right, 0px) + 12px); touch-action: manipulation; }
+
+  #gate {
+    position: fixed;
+    z-index: 6;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+    transform: translateX(-50%);
+    width: min(88vw, 340px);
+    height: 92px;
+    box-sizing: border-box;
+    border: 6px solid #fff;
+    border-radius: 46px;
+    background: var(--close-bg);
+    color: #fff;
+    font: 900 36px/1 var(--font);
+    letter-spacing: .1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    box-shadow: 0 6px 0 rgba(0,0,0,.28);
+    touch-action: manipulation;
+  }
+  #gate[data-mode="open"] { background: var(--open-bg); }
+  #gate:active { transform: translateX(-50%) translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.28); }
+  #gate.pulse { animation: pulse .7s ease-in-out infinite alternate; }
+  @keyframes pulse {
+    from { box-shadow: 0 6px 0 rgba(0,0,0,.28), 0 0 0 0 rgba(255,255,255,.9); }
+    to   { box-shadow: 0 6px 0 rgba(0,0,0,.28), 0 0 0 14px rgba(255,255,255,0); }
+  }
+  @media (prefers-reduced-motion: reduce) { #gate.pulse { animation: none; } }
+  #gate:focus-visible, #mute:focus-visible, #go:focus-visible { outline: 3px solid #2b7de9; outline-offset: 3px; }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: var(--scrim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+  .scrim.hide { display: none; }
+  .card {
+    width: min(100%, 360px);
+    box-sizing: border-box;
+    padding: 28px 24px 24px;
+    border-radius: 32px;
+    background: var(--card-bg);
+    color: var(--card-fg);
+    text-align: center;
+  }
+  .card h1 { margin: 0 0 12px; font-size: 30px; font-weight: 900; letter-spacing: .04em; }
+  .card p  { margin: 0 0 22px; font-size: 16px; line-height: 1.7; font-weight: 700; }
+  #go {
+    width: 100%;
+    min-height: 72px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    font: 900 28px/1 var(--font);
+    letter-spacing: .08em;
+    touch-action: manipulation;
+  }
+  #go:active { transform: scale(.97); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="score" class="chip" aria-live="polite"><span>⭐</span><span id="scoreN">0</span></div>
+<button id="mute" class="chip" aria-label="おとを けす・ならす">🔊</button>
+<button id="gate" data-mode="close" aria-label="ふみきりを しめる・あける"><span id="gateIcon">🚧</span><span id="gateText">しめる</span></button>
+
+<div id="start" class="scrim">
+  <div class="card">
+    <h1>ふみきりゲーム</h1>
+    <p>でんしゃが くると カンカン！<br>したの ボタンで ふみきりを しめよう。<br>とおりすぎたら もういちど おして あけよう。</p>
+    <button id="go">はじめる</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c');
+  let ctx = cv.getContext('2d');
+  const FONT = '"Zen Maru Gothic","Hiragino Maru Gothic ProN","Hiragino Sans",sans-serif';
+  const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // ---- 調整用の定数 ----
+  const ROAD_HALF = 44;             // 道路の半幅
+  const LANE = 22;                  // 車線の中心のずれ
+  const TRACK_H = 44;               // 線路帯の幅
+  const CX = 0, CY = 0;             // 踏切の中心（論理座標の原点）
+  const CAR_L = 42, CAR_W = 26;
+  const CAR_SPEED = 55;
+  const CAR_INTERVAL = [3.2, 6.0];  // 車の出現間隔（秒）※大きいほど少ない
+  const CAR_MAX_PER_LANE = 6;
+  const STOP_GAP = 10;              // 車が止まる位置（線路の手前）
+  const GATE_TIME = 0.7;
+  const TRAIN_INTERVAL = [8, 11];
+  const WARN_LEAD = 6;
+  const TRAIN_VOL = 1.0;
+  const HEAR_DIST = 70;
+  const BELL_VOL = 0.22;
+  const PAL = ['#ef5b5b','#4f9ff0','#f4c542','#7bcf6d','#b78af0','#ff9a4d','#ffffff'];
+  const YEL = '#ffd23f', BLK = '#23272e';
+  const OUT = 'rgba(28,20,40,.78)';   // 濃い縁取り
+
+  // ---- 斜め見下ろし（アイソメ）の投影 ----
+  const IX = 0.72, IY = 0.40, ZS = 0.95;
+  let W = 0, H = 0, S = 1, DPR = 1, SW = 360, SH = 640, SCX = 180, SCY = 270, VIS = 300;
+  function P(x, y, z) { return [SCX + (x - y) * IX, SCY + (x + y) * IY - (z || 0) * ZS]; }
+
+  // ---- 電車の種類（3D：先頭は流線形の鼻先） ----
+  const TRAIN_TYPES = {
+    GreenTrain: {
+      speed: 72, gap: 3, H: 30, style: 'small',
+      cars: [['head', 132], ['mid', 92], ['tail', 132]],
+      nose: 64, N: 14, kh: 0.74, ph: 1.5, kw: 0.62, pw: 1.2,
+      bands: [[0, 0.5, '#eef1ee'], [0.5, 1, '#0c8a55']],
+      stripes: [[0.44, 0.54, '#e8579b']],
+      top: '#0a7a4a', win: '#17222d', skirt: '#39433f',
+      clackAmp: 0.35, roar: 0.75, horn: [740, 932], hornDur: 1.1
+    },
+    RedTrain: {
+      speed: 72, gap: 3, H: 30, style: 'small',
+      cars: [['head', 128], ['mid', 92], ['tail', 128]],
+      nose: 54, N: 14, kh: 0.72, ph: 1.6, kw: 0.5, pw: 1.2,
+      bands: [[0, 1, '#d4202c']],
+      stripes: [[0, 0.1, '#3a3134'], [0.40, 0.47, '#f4f4f4']],
+      top: '#b51a25', win: '#17222d', skirt: '#3a3134',
+      clackAmp: 0.35, roar: 0.75, horn: [660, 831], hornDur: 1.1
+    },
+    SilverTrain: {
+      speed: 52, gap: 3, H: 28, style: 'doors',
+      cars: [['head', 86], ['mid', 86], ['mid', 86], ['tail', 86]],
+      nose: 10, N: 4, kh: 0.10, ph: 2, kw: 0.10, pw: 2,
+      bands: [[0, 1, '#e2e6ea']],
+      stripes: [[0.26, 0.40, '#8ec63f']],
+      top: '#b8bec6', win: '#1b2733', door: '#cdd2d8', skirt: '#4a4f57',
+      clackAmp: 1.4, roar: 0.42, horn: [587, 740], hornDur: 1.6
+    }
+  };
+  const TRAIN_KINDS = Object.keys(TRAIN_TYPES);
+  TRAIN_KINDS.forEach(k => {
+    const t = TRAIN_TYPES[k];
+    t.len = t.cars.reduce((s, c) => s + c[1], 0) + t.gap * (t.cars.length - 1);
+  });
+
+  let started = false, muted = false;
+  let gt = 0, g = 0;
+  let cars = [], train = null, trainTimer = 3, carTimers = [0.6, 2.0];
+  let score = 0, fx = [], toast = null;
+  let blink = 0, bellClock = 0, closedIdle = 0, clock = 0;
+  let hint = false;
+  let gcv = null;                 // 地面を描いておく画用紙
+  let sceneN = [], sceneS = [];   // 木・家（踏切より奥／手前）
+
+  const scoreN = document.getElementById('scoreN');
+  const startEl = document.getElementById('start');
+  const muteBtn = document.getElementById('mute');
+  const gateBtn = document.getElementById('gate');
+  const gateIcon = document.getElementById('gateIcon');
+  const gateText = document.getElementById('gateText');
+
+  // =====================================================================
+  //  音
+  // =====================================================================
+  let actx = null, master = null, silentEl = null, noiseW = null, noiseB = null;
+  let ta = null;
+
+  function makeSilentWav() {
+    const n = 8000;
+    const buf = new Uint8Array(44 + n);
+    const dv = new DataView(buf.buffer);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) buf[o + i] = s.charCodeAt(i); };
+    w(0, 'RIFF'); dv.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt ');
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, 8000, true); dv.setUint32(28, 8000, true);
+    dv.setUint16(32, 1, true); dv.setUint16(34, 8, true);
+    w(36, 'data'); dv.setUint32(40, n, true);
+    buf.fill(128, 44);
+    let s = '';
+    for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+    return 'data:audio/wav;base64,' + btoa(s);
+  }
+  function makeNoise() {
+    if (noiseW || !actx) return;
+    const len = Math.floor(actx.sampleRate * 2);
+    noiseW = actx.createBuffer(1, len, actx.sampleRate);
+    noiseB = actx.createBuffer(1, len, actx.sampleRate);
+    const a = noiseW.getChannelData(0), b = noiseB.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      const w = Math.random() * 2 - 1;
+      a[i] = w;
+      last = (last + 0.02 * w) / 1.02;
+      b[i] = last * 3.5;
+    }
+  }
+  function ensureAudio() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    try {
+      if (!actx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) {
+          actx = new AC();
+          master = actx.createGain();
+          const comp = actx.createDynamicsCompressor();
+          comp.threshold.value = -14;
+          comp.ratio.value = 5;
+          master.connect(comp);
+          comp.connect(actx.destination);
+          makeNoise();
+        }
+      }
+      if (actx && actx.state !== 'running') actx.resume();
+      if (!silentEl) {
+        silentEl = new Audio(makeSilentWav());
+        silentEl.loop = true;
+        silentEl.setAttribute('playsinline', '');
+        const p = silentEl.play();
+        if (p && p.catch) p.catch(() => {});
+      }
+    } catch (e) { /* 音が出せなくても遊べる */ }
+  }
+  function applyMute() {
+    try { if (master && actx) master.gain.setTargetAtTime(muted ? 0 : 1, actx.currentTime, 0.02); } catch (e) {}
+  }
+  function tone(freq, dur, type, vol, slideTo) {
+    try {
+      if (!actx || !master || muted) return;
+      const t = actx.currentTime;
+      const o = actx.createOscillator();
+      const gn = actx.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+      gn.gain.setValueAtTime(vol || 0.25, t);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(gn);
+      gn.connect(master);
+      o.start(t);
+      o.stop(t + dur + 0.03);
+    } catch (e) { /* ignore */ }
+  }
+  // 踏切の警報音：750Hzと700Hzを重ね、1分間に130回断続（電子式）
+  const BELL_PERIOD = 60 / 130;
+  function crossingBell(vol) {
+    try {
+      if (!actx || !master || muted) return;
+      const t = actx.currentTime;
+      const gn = actx.createGain();
+      gn.gain.setValueAtTime(0.0001, t);
+      gn.gain.exponentialRampToValueAtTime(vol, t + 0.03);
+      gn.gain.setValueAtTime(vol, t + 0.11);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
+      gn.connect(master);
+      for (const f of [750, 700]) {
+        const o = actx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = f;
+        o.connect(gn);
+        o.start(t);
+        o.stop(t + 0.4);
+      }
+    } catch (e) { /* ignore */ }
+  }
+  function startTrainAudio() {
+    try {
+      if (!actx || !master || !noiseW) return;
+      stopTrainAudio();
+      const sp = train.spec;
+      const bus = actx.createGain();
+      bus.gain.value = 0;
+      const busLP = actx.createBiquadFilter();
+      busLP.type = 'lowpass';
+      busLP.frequency.value = 1200;
+      bus.connect(busLP);
+      let pan = null;
+      if (actx.createStereoPanner) {
+        pan = actx.createStereoPanner();
+        busLP.connect(pan);
+        pan.connect(master);
+      } else {
+        busLP.connect(master);
+      }
+      const srcs = [];
+      const mk = (buf, type, freq, q, gain) => {
+        const s = actx.createBufferSource();
+        s.buffer = buf; s.loop = true;
+        const f = actx.createBiquadFilter();
+        f.type = type; f.frequency.value = freq; f.Q.value = q;
+        const gn = actx.createGain();
+        gn.gain.value = gain;
+        s.connect(f); f.connect(gn); gn.connect(bus);
+        s.start(0, Math.random() * 1.5);
+        srcs.push(s);
+      };
+      mk(noiseB, 'lowpass', 320, 0.7, TRAIN_VOL * 1.3);
+      mk(noiseW, 'bandpass', 1400, 0.6, TRAIN_VOL * sp.roar);
+      ta = { bus, busLP, pan, srcs, clack: 0.3, step: 0, hornDone: false, vol: 0 };
+    } catch (e) { ta = null; }
+  }
+  function stopTrainAudio() {
+    if (!ta || !actx) { ta = null; return; }
+    const old = ta;
+    ta = null;
+    try {
+      const t = actx.currentTime;
+      old.bus.gain.cancelScheduledValues(t);
+      old.bus.gain.setTargetAtTime(0, t, 0.05);
+      old.srcs.forEach(s => s.stop(t + 0.4));
+    } catch (e) {}
+    setTimeout(() => { try { old.bus.disconnect(); } catch (e) {} }, 700);
+  }
+  function clackHit(step, amp) {
+    try {
+      const t = actx.currentTime;
+      const src = actx.createBufferSource();
+      src.buffer = noiseW;
+      const bp = actx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = step ? 950 : 620;
+      bp.Q.value = 1.2;
+      const gn = actx.createGain();
+      gn.gain.setValueAtTime(0.0001, t);
+      gn.gain.exponentialRampToValueAtTime(Math.max(0.001, amp), t + 0.004);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+      src.connect(bp); bp.connect(gn); gn.connect(ta.bus);
+      src.start(t, Math.random() * 1.5);
+      src.stop(t + 0.14);
+      const o = actx.createOscillator();
+      const og = actx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(step ? 110 : 85, t);
+      o.frequency.exponentialRampToValueAtTime(55, t + 0.12);
+      og.gain.setValueAtTime(Math.max(0.001, amp * 0.5), t);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+      o.connect(og); og.connect(ta.bus);
+      o.start(t); o.stop(t + 0.16);
+    } catch (e) {}
+  }
+  function trainHorn() {
+    try {
+      const sp = train.spec, bus = ta.bus;
+      const t = actx.currentTime, dur = sp.hornDur;
+      const env = actx.createGain();
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.exponentialRampToValueAtTime(0.32, t + 0.08);
+      env.gain.setValueAtTime(0.32, t + dur - 0.4);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      const lp = actx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 2200;
+      lp.connect(env); env.connect(bus);
+      sp.horn.forEach(f => {
+        const o = actx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(f * 1.04, t);
+        o.frequency.exponentialRampToValueAtTime(f, t + 0.15);
+        o.connect(lp);
+        o.start(t); o.stop(t + dur + 0.05);
+      });
+    } catch (e) {}
+  }
+  function updateTrainAudio(dt) {
+    if (!ta || !train || !actx) return;
+    const [xa, xb] = trainExtent(train);
+    const nx = Math.max(xa, Math.min(CX, xb));
+    const d = Math.abs(nx - CX);
+    const vol = 1 / (1 + Math.pow(d / HEAR_DIST, 1.5));
+    ta.vol = vol;
+    try {
+      const t = actx.currentTime;
+      ta.bus.gain.setTargetAtTime(vol, t, 0.05);
+      ta.busLP.frequency.setTargetAtTime(600 + 7400 * Math.pow(vol, 0.8), t, 0.05);
+      if (ta.pan) ta.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, ((nx - CX) / VIS) * 0.9)), t, 0.05);
+    } catch (e) {}
+    const edgeGap = train.dir === 1 ? (CX - ROAD_HALF) - train.f : train.f - (CX + ROAD_HALF);
+    if (!ta.hornDone && edgeGap < 260) { ta.hornDone = true; trainHorn(); }
+    ta.clack -= dt;
+    if (ta.clack <= 0) {
+      const step = ta.step++ % 2;
+      ta.clack = (step === 0 ? 0.15 : 0.20) * (58 / train.spec.speed);
+      clackHit(step, train.spec.clackAmp);
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && actx && actx.state !== 'running') { try { actx.resume(); } catch (e) {} }
+  });
+
+  // =====================================================================
+  //  描画の道具
+  // =====================================================================
+  const shadeCache = {};
+  function shade(hex, f) {
+    const k = hex + '|' + f;
+    if (shadeCache[k]) return shadeCache[k];
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.min(255, Math.round(((n >> 16) & 255) * f));
+    const g2 = Math.min(255, Math.round(((n >> 8) & 255) * f));
+    const b = Math.min(255, Math.round((n & 255) * f));
+    return (shadeCache[k] = 'rgb(' + r + ',' + g2 + ',' + b + ')');
+  }
+  function poly(pts, fill, stroke, lw) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.lineJoin = 'round'; ctx.stroke(); }
+  }
+  // 箱：上は明るく、左（+y面）はふつう、右（+x面）は暗く
+  function drawBox(x0, y0, z0, x1, y1, z1, col, outline) {
+    const oc = outline === false ? null : OUT;
+    poly([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)], shade(col, 0.95), oc, 0.9);
+    poly([P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)], shade(col, 0.7), oc, 0.9);
+    poly([P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)], shade(col, 1.16), oc, 0.9);
+  }
+  function glow(x, y, r, a) {
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, 'rgba(255,70,60,' + a + ')');
+    gr.addColorStop(1, 'rgba(255,70,60,0)');
+    ctx.fillStyle = gr;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  function rng(seed) {
+    let s = seed;
+    return () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296;
+  }
+  function trainExtent(t) {
+    return t.dir === 1 ? [t.f - t.len, t.f] : [t.f, t.f + t.len];
+  }
+
+  // =====================================================================
+  //  地面（一度だけ描いて使いまわす）
+  // =====================================================================
+  function buildGround() {
+    if (!gcv) gcv = document.createElement('canvas');
+    gcv.width = cv.width; gcv.height = cv.height;
+    const saved = ctx;
+    ctx = gcv.getContext('2d');
+    ctx.setTransform(DPR * S, 0, 0, DPR * S, 0, 0);
+
+    // 芝（市松の菱形タイル）
+    const TS = 32;
+    for (let i = -40; i < 40; i++) {
+      for (let j = -40; j < 40; j++) {
+        const a = P(i * TS, j * TS, 0), b = P((i + 1) * TS, j * TS, 0);
+        const c = P((i + 1) * TS, (j + 1) * TS, 0), d = P(i * TS, (j + 1) * TS, 0);
+        const minX = Math.min(a[0], b[0], c[0], d[0]), maxX = Math.max(a[0], b[0], c[0], d[0]);
+        const minY = Math.min(a[1], b[1], c[1], d[1]), maxY = Math.max(a[1], b[1], c[1], d[1]);
+        if (maxX < -2 || minX > SW + 2 || maxY < -2 || minY > SH + 2) continue;
+        const col = ((i + j) & 1) ? '#82d970' : '#78cf66';
+        poly([a, b, c, d], col, col, 0.8);
+      }
+    }
+
+    const LONG = 1400, R = ROAD_HALF, T = TRACK_H / 2;
+    const onScreen = (x, y) => {
+      const p = P(x, y, 0);
+      return p[0] > -60 && p[0] < SW + 60 && p[1] > -60 && p[1] < SH + 60;
+    };
+
+    // 道路
+    poly([P(-R, -LONG, 0), P(R, -LONG, 0), P(R, LONG, 0), P(-R, LONG, 0)], '#6c737f');
+    poly([P(R, -LONG, 0), P(R + 3, -LONG, 0), P(R + 3, LONG, 0), P(R, LONG, 0)], '#b4bac3');
+    poly([P(-R - 3, -LONG, 0), P(-R, -LONG, 0), P(-R, LONG, 0), P(-R - 3, LONG, 0)], '#b4bac3');
+    for (const sx of [-1, 1]) {
+      const a = sx * (R - 5.5), b = sx * (R - 4);
+      poly([P(Math.min(a, b), -LONG, 0), P(Math.max(a, b), -LONG, 0), P(Math.max(a, b), LONG, 0), P(Math.min(a, b), LONG, 0)], '#e9eef2');
+    }
+    for (let y = -LONG; y < LONG; y += 26) {
+      if (Math.abs(y + 7) < T + 14) continue;
+      if (!onScreen(0, y + 7)) continue;
+      poly([P(-1.3, y, 0), P(1.3, y, 0), P(1.3, y + 14, 0), P(-1.3, y + 14, 0)], '#f6c945');
+    }
+
+    // 線路（バラスト・枕木・踏切板・レール）
+    poly([P(-LONG, -T, 0), P(LONG, -T, 0), P(LONG, T, 0), P(-LONG, T, 0)], '#d3c5a0');
+    for (let x = -LONG; x < LONG; x += 12) {
+      if (x > -R - 6 && x < R) continue;
+      if (!onScreen(x + 3, 0)) continue;
+      poly([P(x, -18, 0), P(x + 6, -18, 0), P(x + 6, 18, 0), P(x, 18, 0)], '#8b6b4a');
+    }
+    poly([P(-R, -T, 0), P(R, -T, 0), P(R, T, 0), P(-R, T, 0)], '#7f8693');
+    for (let x = -R + 4; x < R; x += 12) {
+      poly([P(x, -T, 0), P(x + 1.6, -T, 0), P(x + 1.6, T, 0), P(x, T, 0)], '#909aa8');
+    }
+    for (const yy of [-9, 9]) {
+      const a = P(-LONG, yy, 1), b = P(LONG, yy, 1);
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = '#5d646e'; ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1] + 1.2); ctx.lineTo(b[0], b[1] + 1.2); ctx.stroke();
+      ctx.strokeStyle = '#d5dae1'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+    // 停止線
+    ctx.fillStyle = '#ffffff';
+    poly([P(3, -T - STOP_GAP + 1, 0), P(R - 6, -T - STOP_GAP + 1, 0), P(R - 6, -T - STOP_GAP + 3.5, 0), P(3, -T - STOP_GAP + 3.5, 0)], '#ffffff');
+    poly([P(-R + 6, T + STOP_GAP - 3.5, 0), P(-3, T + STOP_GAP - 3.5, 0), P(-3, T + STOP_GAP - 1, 0), P(-R + 6, T + STOP_GAP - 1, 0)], '#ffffff');
+
+    // 花
+    const r = rng(5);
+    const fc = ['#ff8fb1', '#ffe066', '#ffffff', '#ffb36b'];
+    for (let n = 0; n < 900; n++) {
+      const x = (r() * 2 - 1) * 900, y = (r() * 2 - 1) * 900;
+      if (Math.abs(x) < R + 8 || Math.abs(y) < T + 8) continue;
+      const p = P(x, y, 0);
+      if (p[0] < 0 || p[0] > SW || p[1] < 0 || p[1] > SH) continue;
+      if (r() > 0.14) continue;
+      ctx.fillStyle = fc[Math.floor(r() * fc.length)];
+      ctx.beginPath(); ctx.arc(p[0], p[1], 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx = saved;
+  }
+
+  // =====================================================================
+  //  木・家（踏切より奥と手前に分けて持つ）
+  // =====================================================================
+  function buildScenery() {
+    const r = rng(23);
+    const dMax = (SW / 2) / IX + 70;
+    const sMin = (-SCY - 60) / IY, sMax = (SH - SCY + 60) / IY;
+    const list = [];
+    let tries = 0, nTree = 0, nHouse = 0;
+    const WANT_TREE = 60, WANT_HOUSE = 11;
+    while (tries < 6000 && (nTree < WANT_TREE || nHouse < WANT_HOUSE)) {
+      tries++;
+      const u = sMin + (sMax - sMin) * r();
+      const v = (r() * 2 - 1) * dMax;
+      const x = (u + v) / 2, y = (u - v) / 2;
+      const isHouse = nHouse < WANT_HOUSE && r() < 0.18;
+      const clearX = ROAD_HALF + (isHouse ? 60 : 40), clearY = TRACK_H / 2 + (isHouse ? 68 : 50);
+      if (Math.abs(x) < clearX || Math.abs(y) < clearY) continue;
+      if (Math.abs(x) > 1100 || Math.abs(y) > 1100) continue;
+      if (!isHouse && nTree >= WANT_TREE) continue;
+      const minSep = isHouse ? 70 : 34;
+      let ok = true;
+      for (const o of list) {
+        const dd = Math.hypot(o.x - x, o.y - y);
+        if (dd < (o.kind === 'house' ? 70 : 34) || dd < minSep) { ok = false; break; }
+      }
+      if (!ok) continue;
+      if (isHouse) {
+        const roofs = ['#d9534f', '#3f7fd6', '#e0913a', '#8a5fc9', '#2f9e6f'];
+        const walls = ['#f5ead2', '#fbf3e0', '#efe1c4', '#f2f2f2'];
+        list.push({ kind: 'house', x, y, w: 40 + Math.floor(r() * 10), d: 30 + Math.floor(r() * 6), h: 22 + Math.floor(r() * 5),
+          rh: 13, roof: roofs[Math.floor(r() * roofs.length)], wall: walls[Math.floor(r() * walls.length)] });
+        nHouse++;
+      } else {
+        list.push({ kind: r() < 0.3 ? 'pine' : 'tree', x, y, r: 8 + r() * 5 });
+        nTree++;
+      }
+    }
+    sceneN = []; sceneS = [];
+    for (const o of list) {
+      o.key = o.x + o.y;
+      o.fn = o.kind === 'house' ? () => drawHouse(o) : () => drawTree(o);
+      (o.y < 0 ? sceneN : sceneS).push(o);
+    }
+  }
+
+  function drawTree(t) {
+    const sp = P(t.x + 4, t.y + 3, 0);
+    ctx.fillStyle = 'rgba(15,50,25,.26)';
+    ctx.beginPath(); ctx.ellipse(sp[0], sp[1], t.r * 0.95, t.r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    drawBox(t.x - 1.7, t.y - 1.7, 0, t.x + 1.7, t.y + 1.7, 7, '#8a5a34');
+    if (t.kind === 'pine') {
+      const tiers = [[5, t.r * 1.15, t.r * 1.4], [5 + t.r * 0.8, t.r * 0.85, t.r * 1.25]];
+      for (const [zb, hw, hh] of tiers) {
+        const c = P(t.x, t.y, zb), ap = P(t.x, t.y, zb + hh);
+        const bl = [c[0] - hw, c[1]], br = [c[0] + hw, c[1]], bm = [c[0], c[1] + hw * 0.32];
+        poly([bl, ap, bm], '#33a55a', OUT, 0.9);
+        poly([br, ap, bm], '#217a43', OUT, 0.9);
+      }
+    } else {
+      const c = P(t.x, t.y, 7 + t.r * 0.85);
+      ctx.beginPath(); ctx.arc(c[0], c[1], t.r, 0, Math.PI * 2);
+      ctx.fillStyle = '#3aa84f'; ctx.fill();
+      ctx.beginPath(); ctx.arc(c[0] - t.r * 0.28, c[1] - t.r * 0.3, t.r * 0.62, 0, Math.PI * 2);
+      ctx.fillStyle = '#62cf72'; ctx.fill();
+      ctx.beginPath(); ctx.arc(c[0], c[1], t.r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(20,70,35,.85)'; ctx.lineWidth = 1.1; ctx.stroke();
+    }
+  }
+
+  function drawHouse(h) {
+    const x0 = h.x - h.w / 2, x1 = h.x + h.w / 2, y0 = h.y - h.d / 2, y1 = h.y + h.d / 2, ym = h.y;
+    poly([P(x0 + 6, y0 + 4, 0), P(x1 + 6, y0 + 4, 0), P(x1 + 6, y1 + 4, 0), P(x0 + 6, y1 + 4, 0)], 'rgba(15,50,25,.26)');
+    drawBox(x0, y0, 0, x1, y1, h.h, h.wall);
+    // ドアと窓
+    const dc = (x0 + x1) / 2;
+    poly([P(dc - 3.5, y1 + 0.05, 0), P(dc + 3.5, y1 + 0.05, 0), P(dc + 3.5, y1 + 0.05, 10), P(dc - 3.5, y1 + 0.05, 10)], '#7a4a2a', OUT, 0.8);
+    for (const wx of [x0 + 5, x1 - 12]) {
+      poly([P(wx, y1 + 0.05, 9), P(wx + 7, y1 + 0.05, 9), P(wx + 7, y1 + 0.05, 17), P(wx, y1 + 0.05, 17)], '#bfe6ff', OUT, 0.8);
+    }
+    poly([P(x1 + 0.05, ym - 5, 9), P(x1 + 0.05, ym + 5, 9), P(x1 + 0.05, ym + 5, 17), P(x1 + 0.05, ym - 5, 17)], '#9cc9e6', OUT, 0.8);
+    // 屋根（三角の妻面と、手前の斜面）
+    poly([P(x1, y0, h.h), P(x1, y1, h.h), P(x1, ym, h.h + h.rh)], shade(h.wall, 0.72), OUT, 0.9);
+    poly([P(x0 - 3, y1 + 3, h.h), P(x1 + 3, y1 + 3, h.h), P(x1 + 3, ym, h.h + h.rh), P(x0 - 3, ym, h.h + h.rh)], shade(h.roof, 1.0), OUT, 1);
+    poly([P(x1 + 3, y1 + 3, h.h), P(x1 + 3, ym, h.h + h.rh), P(x1 + 3, ym - 1, h.h + h.rh)], shade(h.roof, 0.7), OUT, 0.8);
+    drawBox(x0 + h.w * 0.68, ym - 2, h.h + h.rh * 0.5, x0 + h.w * 0.68 + 4.5, ym + 2, h.h + h.rh + 4, '#a5533c');
+  }
+
+  // =====================================================================
+  //  車・電車・踏切（3D）
+  // =====================================================================
+  function drawCar3D(c) {
+    const x = c.x, y = c.y, hw = CAR_W / 2, hl = CAR_L / 2;
+    poly([P(x - hw + 4, y - hl + 2, 0), P(x + hw + 4, y - hl + 2, 0), P(x + hw + 4, y + hl + 2, 0), P(x - hw + 4, y + hl + 2, 0)], 'rgba(15,40,25,.3)');
+    drawBox(x - hw, y - hl, 2, x + hw, y + hl, 10, c.color);
+    const cy0 = c.lane === 0 ? y - hl + 4 : y - hl + 12;
+    const cy1 = c.lane === 0 ? y + hl - 12 : y + hl - 4;
+    drawBox(x - hw + 3, cy0, 10, x + hw - 3, cy1, 18, c.color);
+    // ガラス
+    const gz0 = 11.4, gz1 = 16.8;
+    poly([P(x - hw + 5, cy1 + 0.05, gz0), P(x + hw - 5, cy1 + 0.05, gz0), P(x + hw - 5, cy1 + 0.05, gz1), P(x - hw + 5, cy1 + 0.05, gz1)], '#27384a');
+    const xr = x + hw - 3 + 0.05, mid = (cy0 + cy1) / 2;
+    poly([P(xr, cy0 + 2, gz0), P(xr, mid - 0.8, gz0), P(xr, mid - 0.8, gz1), P(xr, cy0 + 2, gz1)], '#27384a');
+    poly([P(xr, mid + 0.8, gz0), P(xr, cy1 - 2, gz0), P(xr, cy1 - 2, gz1), P(xr, mid + 0.8, gz1)], '#27384a');
+    // ライト（前は黄色、後ろは赤）
+    const lc = c.lane === 0 ? '#fff3a6' : '#ff5a4a';
+    for (const lx of [x - hw + 3, x + hw - 7]) {
+      poly([P(lx, y + hl + 0.05, 5), P(lx + 4, y + hl + 0.05, 5), P(lx + 4, y + hl + 0.05, 7.6), P(lx, y + hl + 0.05, 7.6)], lc);
+    }
+    // タイヤ
+    ctx.fillStyle = '#1d2026';
+    for (const wy of [y - 11, y + 11]) {
+      const p = P(x + hw, wy, 2.6);
+      ctx.beginPath(); ctx.arc(p[0], p[1], 3.3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawRailCar3D(xa, xb, role, dir, sp) {
+    const Wd = 8, z0 = 3, Hb = sp.H;
+    const hasNose = role !== 'mid';
+    const noseHigh = role === 'head' ? dir === 1 : (role === 'tail' ? dir === -1 : false);
+    const Ln = sp.nose;
+    const xs = [];
+    if (!hasNose) xs.push(xa, xb);
+    else if (noseHigh) { xs.push(xa); for (let i = 0; i <= sp.N; i++) xs.push(xb - Ln + Ln * i / sp.N); }
+    else { for (let i = 0; i <= sp.N; i++) xs.push(xa + Ln * i / sp.N); xs.push(xb); }
+    const pts = xs.map(x => {
+      let t = 0;
+      if (hasNose) t = noseHigh ? (x - (xb - Ln)) / Ln : ((xa + Ln) - x) / Ln;
+      t = Math.max(0, Math.min(1, t));
+      return { x, t, h: Hb * (1 - sp.kh * Math.pow(t, sp.ph)), w: Wd * (1 - sp.kw * Math.pow(t, sp.pw)) };
+    });
+    const n = pts.length, last = pts[n - 1];
+    const upper = sp.bands[sp.bands.length - 1][2];
+
+    // 影
+    poly([P(xa + 7, -Wd + 4, 0), P(xb + 7, -Wd + 4, 0), P(xb + 7, Wd + 4, 0), P(xa + 7, Wd + 4, 0)], 'rgba(15,40,25,.3)');
+    // 床下
+    poly([P(xa + 1, Wd - 1.5, 0), P(xb - 1, Wd - 1.5, 0), P(xb - 1, Wd - 1.5, z0 + 1), P(xa + 1, Wd - 1.5, z0 + 1)], sp.skirt);
+
+    const sideQuad = (p, q, f0, f1, col) => {
+      const fill = shade(col, 0.95);
+      poly([P(p.x, p.w, z0 + p.h * f0), P(q.x, q.w, z0 + q.h * f0), P(q.x, q.w, z0 + q.h * f1), P(p.x, p.w, z0 + p.h * f1)], fill, fill, 0.7);
+    };
+    // 側面（色の帯）
+    for (let i = 0; i < n - 1; i++) {
+      for (const b of sp.bands) sideQuad(pts[i], pts[i + 1], b[0], b[1], b[2]);
+    }
+    // 窓・ドア
+    const bodyStart = hasNose && !noseHigh ? xa + Ln + 6 : xa + 6;
+    const bodyEnd = hasNose && noseHigh ? xb - Ln - 6 : xb - 6;
+    const yv = Wd + 0.1;
+    const wq = (x0, x1, f0, f1, col) => poly([P(x0, yv, z0 + Hb * f0), P(x1, yv, z0 + Hb * f0), P(x1, yv, z0 + Hb * f1), P(x0, yv, z0 + Hb * f1)], col);
+    if (sp.style === 'small') {
+      for (let x = bodyStart; x + 8 <= bodyEnd; x += 13) wq(x, x + 8, 0.58, 0.8, sp.win);
+    } else {
+      wq(bodyStart, bodyEnd, 0.5, 0.86, sp.win);
+      for (let i = 0; i < 4; i++) {
+        const dc = bodyStart + (bodyEnd - bodyStart) * (0.12 + 0.253 * i);
+        wq(dc - 6, dc + 6, 0.06, 0.9, sp.door);
+        wq(dc - 4.5, dc - 1, 0.52, 0.8, sp.win);
+        wq(dc + 1, dc + 4.5, 0.52, 0.8, sp.win);
+      }
+    }
+    // 帯（ドアの上にもかかる）
+    for (let i = 0; i < n - 1; i++) {
+      for (const s of sp.stripes) sideQuad(pts[i], pts[i + 1], s[0], s[1], s[2]);
+    }
+    // 屋根
+    for (let i = 0; i < n - 1; i++) {
+      const p = pts[i], q = pts[i + 1];
+      const fill = shade(sp.top, 1.12);
+      poly([P(p.x, -p.w, z0 + p.h), P(q.x, -q.w, z0 + q.h), P(q.x, q.w, z0 + q.h), P(p.x, p.w, z0 + p.h)], fill, fill, 0.7);
+    }
+    // 運転席の窓（鼻先）
+    if (hasNose && sp.style === 'small') {
+      for (let i = 0; i < n - 1; i++) {
+        const p = pts[i], q = pts[i + 1], tm = (p.t + q.t) / 2;
+        if (tm > 0.22 && tm < 0.72) {
+          poly([P(p.x, -p.w * 0.62, z0 + p.h + 0.1), P(q.x, -q.w * 0.62, z0 + q.h + 0.1), P(q.x, q.w * 0.62, z0 + q.h + 0.1), P(p.x, p.w * 0.62, z0 + p.h + 0.1)], sp.win);
+        }
+        if (tm > 0.08 && tm < 0.5) {
+          poly([P(p.x, p.w + 0.1, z0 + p.h * 0.55), P(q.x, q.w + 0.1, z0 + q.h * 0.55), P(q.x, q.w + 0.1, z0 + q.h * 0.86), P(p.x, p.w + 0.1, z0 + p.h * 0.86)], sp.win);
+        }
+      }
+    }
+    // 端の面（先頭は車体色、つなぎ目は暗い色）
+    const capCol = hasNose && noseHigh ? shade(upper, 0.72) : '#2a2d33';
+    poly([P(xb, -last.w, z0), P(xb, last.w, z0), P(xb, last.w, z0 + last.h), P(xb, -last.w, z0 + last.h)], capCol);
+    if (hasNose && noseHigh) {
+      if (sp.style === 'doors' && role === 'head') {
+        poly([P(xb + 0.05, -last.w * 0.78, z0 + last.h * 0.28), P(xb + 0.05, last.w * 0.78, z0 + last.h * 0.28),
+              P(xb + 0.05, last.w * 0.78, z0 + last.h * 0.88), P(xb + 0.05, -last.w * 0.78, z0 + last.h * 0.88)], sp.win);
+      }
+      const lp = P(xb + 0.05, 0, z0 + last.h * (sp.style === 'doors' ? 0.16 : 0.42));
+      ctx.fillStyle = role === 'head' ? '#fff6c0' : '#ff4a3d';
+      ctx.beginPath(); ctx.arc(lp[0], lp[1], 1.7, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // 縁取り（シルエット）
+    const sil = [];
+    for (let i = 0; i < n; i++) sil.push(P(pts[i].x, pts[i].w, z0));
+    sil.push(P(xb, -last.w, z0));
+    sil.push(P(xb, -last.w, z0 + last.h));
+    for (let i = n - 1; i >= 0; i--) sil.push(P(pts[i].x, -pts[i].w, z0 + pts[i].h));
+    sil.push(P(pts[0].x, pts[0].w, z0 + pts[0].h));
+    poly(sil, null, OUT, 1.1);
+    // 屋根の手前のふち（つや）
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const p = P(pts[i].x, pts[i].w, z0 + pts[i].h);
+      if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 0.9; ctx.stroke();
+
+    // 車輪
+    const bx = hasNose ? [xa + 16, (noseHigh ? xb - Math.max(18, Ln + 4) : xa + Math.max(18, Ln + 4))] : [xa + 16, xb - 16];
+    ctx.fillStyle = '#15171b';
+    for (const bxx of bx) {
+      for (const dx of [-5, 5]) {
+        const p = P(bxx + dx, Wd, 2.2);
+        ctx.beginPath(); ctx.arc(p[0], p[1], 2.7, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // パンタグラフ／屋根の機器
+    const xc = (bodyStart + bodyEnd) / 2, zt = z0 + Hb;
+    if (role === 'mid' && sp.style === 'small') {
+      const a = P(xc - 6, 0, zt), b = P(xc, 0, zt + 8), c = P(xc + 6, 0, zt);
+      ctx.strokeStyle = '#4b5159'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.stroke();
+      const b1 = P(xc - 4, -4, zt + 8.5), b2 = P(xc - 4, 4, zt + 8.5);
+      ctx.strokeStyle = '#8a9099'; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(b1[0], b1[1]); ctx.lineTo(b2[0], b2[1]); ctx.stroke();
+    } else if (sp.style === 'doors') {
+      drawBox(xc - 12, -4, zt, xc + 12, 4, zt + 3.5, '#c3c8cf');
+    }
+  }
+
+  function drawGate3D(px, py, dirx, warn, phaseOn) {
+    poly([P(px - 2 + 5, py - 2 + 3, 0), P(px + 2 + 5, py - 2 + 3, 0), P(px + 2 + 5, py + 2 + 3, 0), P(px - 2 + 5, py + 2 + 3, 0)], 'rgba(15,40,25,.3)');
+    // 黄黒の柱
+    const segH = 9;
+    for (let i = 0; i < 5; i++) drawBox(px - 2, py - 2, i * segH, px + 2, py + 2, (i + 1) * segH, i % 2 ? BLK : YEL);
+    // 遮断棒（黄黒）
+    const th = (1 - g) * (80 * Math.PI / 180);
+    const L = 54, zp = 14, yy = py + 2;
+    const d = [dirx * Math.cos(th), Math.sin(th)];
+    const nr = [-dirx * Math.sin(th), Math.cos(th)];
+    const pt = (s, t, y) => P(px + d[0] * s + nr[0] * t, y, zp + d[1] * s + nr[1] * t);
+    poly([pt(0, 2.2, yy), pt(L, 2.2, yy), pt(L, 2.2, yy - 3.4), pt(0, 2.2, yy - 3.4)], '#e0b52a');
+    for (let k = 0; k < 8; k++) {
+      const s0 = k * L / 8, s1 = (k + 1) * L / 8;
+      const col = k % 2 ? shade(BLK, 1) : shade(YEL, 0.97);
+      poly([pt(s0, -2.2, yy), pt(s1, -2.2, yy), pt(s1, 2.2, yy), pt(s0, 2.2, yy)], col, col, 0.5);
+    }
+    poly([pt(0, -2.2, yy), pt(L, -2.2, yy), pt(L, 2.2, yy), pt(0, 2.2, yy)], null, OUT, 1);
+    const tipLit = warn && (reduceMotion ? true : phaseOn);
+    const tp = pt(L, 0, yy);
+    if (tipLit) glow(tp[0], tp[1], 16, 0.55);
+    ctx.fillStyle = tipLit ? '#ff4a3d' : '#5a2323';
+    ctx.beginPath(); ctx.arc(tp[0], tp[1], 3.4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = OUT; ctx.lineWidth = 0.8; ctx.stroke();
+    const hp = P(px, yy, zp);
+    ctx.fillStyle = BLK; ctx.beginPath(); ctx.arc(hp[0], hp[1], 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = YEL; ctx.beginPath(); ctx.arc(hp[0], hp[1], 2, 0, Math.PI * 2); ctx.fill();
+
+    // 警報灯（交互に光る全方向形）
+    drawBox(px - 13, py - 1.6, 46, px + 13, py + 1.6, 49.5, '#2c3038');
+    [[0, px - 11], [1, px + 11]].forEach(([i, lx]) => {
+      const lit = warn && (reduceMotion ? true : (phaseOn ? i === 0 : i === 1));
+      const lp = P(lx, py + 2, 53);
+      if (lit) glow(lp[0], lp[1], 30, 0.6);
+      ctx.beginPath(); ctx.arc(lp[0], lp[1], 5.4, 0, Math.PI * 2);
+      ctx.fillStyle = lit ? '#ff4a3d' : '#5a2323'; ctx.fill();
+      ctx.strokeStyle = OUT; ctx.lineWidth = 0.9; ctx.stroke();
+      if (lit) {
+        ctx.fillStyle = 'rgba(255,255,255,.75)';
+        ctx.beginPath(); ctx.arc(lp[0] - 1.6, lp[1] - 1.8, 1.6, 0, Math.PI * 2); ctx.fill();
+      }
+    });
+    // X字の標識（黄と黒）
+    const sy = py + 3.6, sz = 77, hs = 15;
+    const a1 = P(px - hs, sy, sz - hs), a2 = P(px + hs, sy, sz + hs);
+    const b1 = P(px - hs, sy, sz + hs), b2 = P(px + hs, sy, sz - hs);
+    ctx.lineCap = 'butt';
+    for (const [w, col] of [[8.4, BLK], [5.4, YEL]]) {
+      ctx.strokeStyle = col; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(a1[0], a1[1]); ctx.lineTo(a2[0], a2[1]); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(b1[0], b1[1]); ctx.lineTo(b2[0], b2[1]); ctx.stroke();
+    }
+    drawBox(px - 1.2, py - 1.2, 49.5, px + 1.2, py + 1.2, 62, BLK, false);
+  }
+
+  // =====================================================================
+  //  画面サイズ・生成・更新
+  // =====================================================================
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 3);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * DPR);
+    cv.height = Math.round(H * DPR);
+    S = Math.min(W / 360, H / 640);
+    SW = W / S; SH = H / S;
+    SCX = SW / 2; SCY = SH * 0.42;
+    VIS = Math.max(300, Math.ceil((SW / 2) / IX) + 70);
+    buildScenery();
+    buildGround();
+  }
+
+  const pick = () => PAL[Math.floor(Math.random() * PAL.length)];
+  function spawnCar(lane) {
+    const same = cars.filter(c => c.lane === lane);
+    if (same.length >= CAR_MAX_PER_LANE) return;
+    const y = lane === 0 ? -VIS : VIS;
+    for (const c of same) if (Math.abs(c.y - y) < CAR_L + 18) return;
+    cars.push({ lane, x: CX + (lane === 0 ? LANE : -LANE), y, color: pick(), counted: false });
+  }
+  function spawnTrain() {
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const kind = TRAIN_KINDS[Math.floor(Math.random() * TRAIN_KINDS.length)];
+    const spec = TRAIN_TYPES[kind];
+    const v = spec.speed;
+    const f0 = dir === 1
+      ? Math.min(-VIS * 0.9, CX - ROAD_HALF - v * WARN_LEAD)
+      : Math.max(VIS * 0.9, CX + ROAD_HALF + v * WARN_LEAD);
+    train = { dir, kind, spec, len: spec.len, f: f0, cleared: false };
+    startTrainAudio();
+  }
+
+  function update(dt) {
+    clock += dt;
+    const zoneTop = CY - TRACK_H / 2, zoneBot = CY + TRACK_H / 2;
+
+    const sp = 1 / GATE_TIME;
+    if (g < gt) g = Math.min(gt, g + sp * dt);
+    else if (g > gt) g = Math.max(gt, g - sp * dt);
+    blink += dt;
+
+    for (let l = 0; l < 2; l++) {
+      carTimers[l] -= dt;
+      if (carTimers[l] <= 0) { spawnCar(l); carTimers[l] = CAR_INTERVAL[0] + Math.random() * (CAR_INTERVAL[1] - CAR_INTERVAL[0]); }
+    }
+
+    if (started) {
+      if (!train) {
+        trainTimer -= dt;
+        if (trainTimer <= 0) spawnTrain();
+      } else {
+        train.f += train.dir * train.spec.speed * dt;
+        const tail = train.dir === 1 ? train.f - train.len : train.f + train.len;
+        if (!train.cleared) {
+          const passed = train.dir === 1 ? tail > CX + ROAD_HALF + 10 : tail < CX - ROAD_HALF - 10;
+          if (passed) train.cleared = true;
+        }
+        const gone = train.dir === 1 ? tail > VIS + 20 : tail < -VIS - 20;
+        if (gone) {
+          stopTrainAudio();
+          train = null;
+          trainTimer = TRAIN_INTERVAL[0] + Math.random() * (TRAIN_INTERVAL[1] - TRAIN_INTERVAL[0]);
+        }
+      }
+    }
+    const warn = !!train && !train.cleared;
+
+    if (warn) {
+      bellClock -= dt;
+      if (bellClock <= 0) {
+        bellClock = BELL_PERIOD;
+        const duck = ta ? 1 - 0.45 * ta.vol : 1;
+        crossingBell(BELL_VOL * duck);
+      }
+    } else bellClock = 0;
+
+    updateTrainAudio(dt);
+
+    const blocked = g > 0.6;
+    for (const lane of [0, 1]) {
+      const dir = lane === 0 ? 1 : -1;
+      const arr = cars.filter(c => c.lane === lane).sort((a, b) => lane === 0 ? b.y - a.y : a.y - b.y);
+      for (let i = 0; i < arr.length; i++) {
+        const c = arr[i];
+        c.x = CX + (lane === 0 ? LANE : -LANE);
+        let v = CAR_SPEED;
+        if (i > 0) {
+          const a = arr[i - 1];
+          const gap = (a.y - c.y) * dir - CAR_L;
+          if (gap < 12) v = 0;
+        }
+        let ny = c.y + dir * v * dt;
+        if (blocked) {
+          if (lane === 0) {
+            const limit = zoneTop - STOP_GAP - CAR_L / 2;
+            if (c.y <= limit + 0.5 && ny > limit) ny = limit;
+          } else {
+            const limit = zoneBot + STOP_GAP + CAR_L / 2;
+            if (c.y >= limit - 0.5 && ny < limit) ny = limit;
+          }
+        }
+        c.y = ny;
+        if (!c.counted) {
+          const done = lane === 0 ? c.y - CAR_L / 2 > zoneBot : c.y + CAR_L / 2 < zoneTop;
+          if (done) { c.counted = true; score++; scoreN.textContent = score; }
+        }
+      }
+    }
+    cars = cars.filter(c => c.lane === 0 ? c.y < VIS + CAR_L + 10 : c.y > -VIS - CAR_L - 10);
+
+    if (train) {
+      const [xa, xb] = trainExtent(train);
+      const remain = [];
+      for (const c of cars) {
+        const overlapX = c.x - CAR_W / 2 < xb && c.x + CAR_W / 2 > xa;
+        const overlapY = c.y + CAR_L / 2 > CY - TRACK_H / 2 && c.y - CAR_L / 2 < CY + TRACK_H / 2;
+        if (overlapX && overlapY) {
+          for (let k = 0; k < 8; k++) {
+            fx.push({ x: c.x, y: c.y, z: 12, vx: (Math.random() - 0.5) * 90, vy: (Math.random() - 0.5) * 90, vz: 60 + Math.random() * 70, life: 0.9 });
+          }
+          toast = { t: 1.6 };
+          tone(420, 0.35, 'triangle', 0.3, 140);
+        } else remain.push(c);
+      }
+      cars = remain;
+    }
+
+    for (const p of fx) { p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vz -= 220 * dt; p.life -= dt; }
+    fx = fx.filter(p => p.life > 0);
+    if (toast) { toast.t -= dt; if (toast.t <= 0) toast = null; }
+
+    if (gt === 1 && !warn) closedIdle += dt; else closedIdle = 0;
+    hint = started && ((warn && gt === 0) || (gt === 1 && !warn && closedIdle > 2.5));
+    gateBtn.classList.toggle('pulse', hint);
+  }
+
+  // =====================================================================
+  //  描画
+  // =====================================================================
+  function draw() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(gcv, 0, 0);
+    ctx.setTransform(DPR * S, 0, 0, DPR * S, 0, 0);
+
+    const warn = !!train && !train.cleared;
+    const phaseOn = Math.floor(blink / 0.5) % 2 === 0;
+
+    // 警報中は踏切まわりの地面がやわらかく赤く光る
+    if (warn) {
+      const a = reduceMotion ? 0.16 : (phaseOn ? 0.26 : 0.10);
+      const c0 = P(0, 0, 0);
+      ctx.save();
+      ctx.translate(c0[0], c0[1]);
+      ctx.scale(1, 0.55);
+      const gr = ctx.createRadialGradient(0, 0, 10, 0, 0, 150);
+      gr.addColorStop(0, 'rgba(255,60,50,' + a + ')');
+      gr.addColorStop(1, 'rgba(255,60,50,0)');
+      ctx.fillStyle = gr;
+      ctx.fillRect(-150, -150, 300, 300);
+      ctx.restore();
+    }
+
+    // 奥（線路より北）／線路の上／手前（南）の順に、それぞれ奥から手前へ描く
+    const north = sceneN.slice(), band = [], south = sceneS.slice();
+    north.push({ key: 30, fn: () => drawGate3D(ROAD_HALF + 12, -TRACK_H / 2 - 4, -1, warn, phaseOn) });
+    south.push({ key: -30, fn: () => drawGate3D(-ROAD_HALF - 12, TRACK_H / 2 + 4, 1, warn, phaseOn) });
+    for (const c of cars) {
+      const item = { key: c.x + c.y, fn: () => drawCar3D(c) };
+      const bot = c.y + CAR_L / 2, top = c.y - CAR_L / 2;
+      if (bot <= -TRACK_H / 2) north.push(item);
+      else if (top >= TRACK_H / 2) south.push(item);
+      else band.push(item);
+    }
+    if (train) {
+      const sp = train.spec;
+      let off = 0;
+      for (let i = 0; i < sp.cars.length; i++) {
+        const role = sp.cars[i][0], w = sp.cars[i][1];
+        let xa, xb;
+        if (train.dir === 1) { xb = train.f - off; xa = xb - w; } else { xa = train.f + off; xb = xa + w; }
+        off += w + sp.gap;
+        const dirNow = train.dir;
+        band.push({ key: (xa + xb) / 2, fn: () => drawRailCar3D(xa, xb, role, dirNow, sp) });
+      }
+    }
+    const byKey = (a, b) => a.key - b.key;
+    north.sort(byKey); band.sort(byKey); south.sort(byKey);
+    for (const it of north) it.fn();
+    for (const it of band) it.fn();
+    for (const it of south) it.fn();
+
+    // 星のかけら
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '18px ' + FONT;
+    for (const p of fx) {
+      const q = P(p.x, p.y, Math.max(0, p.z));
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life / 0.5));
+      ctx.fillStyle = YEL;
+      ctx.fillText('★', q[0], q[1]);
+    }
+    ctx.globalAlpha = 1;
+
+    if (toast) {
+      const q = P(0, 0, 60);
+      ctx.globalAlpha = Math.min(1, toast.t / 0.4);
+      ctx.beginPath();
+      const bx = q[0] - 52, by = q[1] - 58, bw = 104, bh = 38, br = 19;
+      ctx.moveTo(bx + br, by);
+      ctx.arcTo(bx + bw, by, bx + bw, by + bh, br);
+      ctx.arcTo(bx + bw, by + bh, bx, by + bh, br);
+      ctx.arcTo(bx, by + bh, bx, by, br);
+      ctx.arcTo(bx, by, bx + bw, by, br);
+      ctx.closePath();
+      ctx.fillStyle = '#fffdf6'; ctx.fill();
+      ctx.strokeStyle = OUT; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.font = '900 20px ' + FONT;
+      ctx.fillStyle = '#2b3440';
+      ctx.fillText('あれれ！', q[0], by + bh / 2 + 1);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // =====================================================================
+  //  入力
+  // =====================================================================
+  function refreshButton() {
+    if (gt === 0) {
+      gateBtn.dataset.mode = 'close';
+      gateIcon.textContent = '🚧';
+      gateText.textContent = 'しめる';
+    } else {
+      gateBtn.dataset.mode = 'open';
+      gateIcon.textContent = '✅';
+      gateText.textContent = 'あける';
+    }
+  }
+  function toggleGate() {
+    if (!started) return;
+    ensureAudio();
+    gt = gt ? 0 : 1;
+    refreshButton();
+    tone(gt ? 520 : 390, 0.12, 'square', 0.12);
+  }
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); toggleGate(); });
+  gateBtn.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); toggleGate(); });
+  gateBtn.addEventListener('click', e => { if (e.detail === 0) toggleGate(); });
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); toggleGate(); }
+  });
+  document.getElementById('go').addEventListener('click', () => {
+    ensureAudio();
+    started = true;
+    trainTimer = 3;
+    startEl.classList.add('hide');
+    crossingBell(BELL_VOL);
+  });
+  muteBtn.addEventListener('click', () => {
+    muted = !muted;
+    muteBtn.textContent = muted ? '🔇' : '🔊';
+    ensureAudio();
+    applyMute();
+    if (!muted) setTimeout(() => crossingBell(BELL_VOL), 60);
+  });
+  ['gesturestart', 'dblclick'].forEach(t => document.addEventListener(t, e => e.preventDefault()));
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
+
+  // =====================================================================
+  //  メインループ
+  // =====================================================================
+  resize();
+  refreshButton();
+  let last = performance.now();
+  function frame(now) {
+    let dt = (now - last) / 1000;
+    last = now;
+    if (dt > 0.05) dt = 0.05;
+    if (dt < 0) dt = 0;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
